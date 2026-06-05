@@ -98,7 +98,7 @@ function robustModelBox(root) {
   root.updateMatrixWorld(true);
   const centers = [], boxes = [];
   root.traverse((o) => {
-    if (!o.isMesh) return;
+    if (!o.isMesh || o.visible === false) return;     // ausgeblendete (Off-Layer) nicht mitrahmen
     const b = new THREE.Box3().setFromObject(o);
     if (!b.isEmpty()) { boxes.push(b); centers.push(b.getCenter(new THREE.Vector3())); }
   });
@@ -220,14 +220,18 @@ function postProcessRhino(root) {
   const remove = [];
   root.traverse((o) => {
     if (o.isLine || o.isLineSegments || o.isPoints) { remove.push(o); return; }
-    if (o.isMesh) {
-      const n = rhinoLayerName(o, layers);
-      const ln = n ? String(n).toLowerCase() : '';
-      if (ln.includes('glas') || ln.includes('glaß')) {
-        o.material = glassMat;
-        o.userData.isGlass = true;
-        o.renderOrder = 2;
-      }
+    if (!o.isMesh) return;
+    const idx = o.userData && o.userData.attributes ? o.userData.attributes.layerIndex : null;
+    const layer = (layers && idx != null) ? layers[idx] : null;
+    const name = layer ? (typeof layer === 'string' ? layer : (layer.name || '')) : '';
+    const ln = name.toLowerCase();
+    const isGlass = ln.includes('glas') || ln.includes('glaß');
+    if (isGlass) {
+      o.material = glassMat;
+      o.userData.isGlass = true;
+      o.renderOrder = 2;
+    } else if (layer && layer.visible === false) {
+      o.visible = false;          // Layer ist in Rhino ausgeblendet
     }
   });
   remove.forEach((o) => { if (o.parent) o.parent.remove(o); o.geometry && o.geometry.dispose(); });

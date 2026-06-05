@@ -10,7 +10,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { N8AOPass } from 'https://cdn.jsdelivr.net/npm/n8ao@1.9.4/+esm';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';
@@ -39,7 +39,7 @@ function defaults() {
     post: {
       shadows: true, shadowRes: 2048, supersample: 1, ambient: 0.25,
       ibl: true, iblIntensity: 1,
-      ao: { on: true, radius: 16 },
+      ao: { on: true, radius: 30, intensity: 1.5 },
       bloom: { on: false, strength: 0.35, threshold: 0.85, radius: 0.4 },
       dof: { on: false, focus: 0, aperture: 2, maxblur: 0.01 },
       vignette: { on: false, amount: 1.0 },
@@ -147,7 +147,9 @@ panel.innerHTML = `
 
     <div class="dl-sec">
       <div class="h">Post-Processing</div>
-      ${toggle('dl-ao', 'Ambient Occlusion')}<div class="dl-sub">${slider('dl-ao-radius', 'Radius', 2, 64, 1, 16, '')}</div>
+      ${toggle('dl-ao', 'Ambient Occlusion')}<div class="dl-sub">
+        ${slider('dl-ao-radius', 'Radius', 1, 120, 1, 30, '')}
+        ${slider('dl-ao-intensity', 'Stärke', 0, 4, 0.1, 1.5, '')}</div>
       <div style="height:9px"></div>
       ${toggle('dl-bloom', 'Bloom (Leuchten)')}<div class="dl-sub">
         ${slider('dl-bloom-strength', 'Stärke', 0, 2, 0.05, 0.35, '')}
@@ -254,8 +256,11 @@ function buildComposer() {
   composer.addPass(new RenderPass(scene, camera));
 
   if (p.ao.on) {
-    const ao = new SSAOPass(scene, camera, w, h);
-    ao.kernelRadius = p.ao.radius; ao.minDistance = 0.0008; ao.maxDistance = 0.12;
+    const ao = new N8AOPass(scene, camera, w, h);
+    ao.configuration.aoRadius = p.ao.radius;
+    ao.configuration.intensity = p.ao.intensity;
+    ao.configuration.distanceFalloff = 1;
+    ao.configuration.gammaCorrection = false;   // OutputPass übernimmt Farbraum/Tone
     composer.addPass(ao);
   }
   if (p.dof.on) {
@@ -338,7 +343,7 @@ function writeInputs() {
   setSlider('dl-time', cfg.time, 'time'); setSlider('dl-north', cfg.north, '°'); setSlider('dl-ambient', p.ambient, '');
   setTog('dl-shadows', p.shadows); $('dl-shadowRes').value = String(p.shadowRes); $('dl-supersample').value = String(p.supersample);
   setTog('dl-ibl', p.ibl); setSlider('dl-ibl-int', p.iblIntensity, '');
-  setTog('dl-ao', p.ao.on); setSlider('dl-ao-radius', p.ao.radius, '');
+  setTog('dl-ao', p.ao.on); setSlider('dl-ao-radius', p.ao.radius, ''); setSlider('dl-ao-intensity', p.ao.intensity, '');
   setTog('dl-bloom', p.bloom.on); setSlider('dl-bloom-strength', p.bloom.strength, ''); setSlider('dl-bloom-threshold', p.bloom.threshold, ''); setSlider('dl-bloom-radius', p.bloom.radius, '');
   setTog('dl-dof', p.dof.on); setSlider('dl-dof-focus', p.dof.focus, '%'); setSlider('dl-dof-aperture', p.dof.aperture, '');
   setTog('dl-vignette', p.vignette.on); setSlider('dl-vignette-amount', p.vignette.amount, '');
@@ -352,7 +357,7 @@ function readInputs() {
   cfg.time = +$('dl-time').value; cfg.north = +$('dl-north').value; p.ambient = +$('dl-ambient').value;
   p.shadows = $('dl-shadows-tog').classList.contains('on'); p.shadowRes = +$('dl-shadowRes').value; p.supersample = +$('dl-supersample').value;
   p.ibl = $('dl-ibl-tog').classList.contains('on'); p.iblIntensity = +$('dl-ibl-int').value;
-  p.ao.on = $('dl-ao-tog').classList.contains('on'); p.ao.radius = +$('dl-ao-radius').value;
+  p.ao.on = $('dl-ao-tog').classList.contains('on'); p.ao.radius = +$('dl-ao-radius').value; p.ao.intensity = +$('dl-ao-intensity').value;
   p.bloom.on = $('dl-bloom-tog').classList.contains('on'); p.bloom.strength = +$('dl-bloom-strength').value; p.bloom.threshold = +$('dl-bloom-threshold').value; p.bloom.radius = +$('dl-bloom-radius').value;
   p.dof.on = $('dl-dof-tog').classList.contains('on'); p.dof.focus = +$('dl-dof-focus').value; p.dof.aperture = +$('dl-dof-aperture').value;
   p.vignette.on = $('dl-vignette-tog').classList.contains('on'); p.vignette.amount = +$('dl-vignette-amount').value;
