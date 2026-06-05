@@ -16,8 +16,9 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+// Unbeleuchtete, fotografisch gebackene Texturen -> ohne Tone-Mapping
+// werden die Original-Farben des Scans am genauesten wiedergegeben.
+renderer.toneMapping = THREE.NoToneMapping;
 app.appendChild(renderer.domElement);
 renderer.domElement.tabIndex = 0;
 
@@ -63,14 +64,27 @@ loader.load(
     model.rotateX(-Math.PI / 2);
     model.updateMatrixWorld(true);
 
+    // Matterport-Texturen sind fotografisch "gebacken" (Licht steckt schon im
+    // Bild). Daher: UNBELEUCHTETE (MeshBasic) + DOPPELSEITIGE Materialien.
+    // -> jede Fläche zeigt ihr Foto in voller Helligkeit, keine schwarzen
+    //    Stellen durch Beleuchtung oder Backface-Culling.
     model.traverse((o) => {
-      if (o.isMesh) {
-        o.frustumCulled = true;
-        if (o.material) {
-          o.material.side = THREE.DoubleSide;
-          if (o.material.map) o.material.map.colorSpace = THREE.SRGBColorSpace;
-        }
-      }
+      if (!o.isMesh) return;
+      o.frustumCulled = true;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      const converted = mats.map((m) => {
+        if (!m) return m;
+        const map = m.map || null;
+        if (map) map.colorSpace = THREE.SRGBColorSpace;
+        const basic = new THREE.MeshBasicMaterial({
+          map,
+          color: map ? 0xffffff : (m.color || new THREE.Color(0xcccccc)),
+          side: THREE.DoubleSide,
+        });
+        m.dispose?.();
+        return basic;
+      });
+      o.material = Array.isArray(o.material) ? converted : converted[0];
     });
 
     scene.add(model);
