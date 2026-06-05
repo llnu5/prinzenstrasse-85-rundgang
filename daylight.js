@@ -149,7 +149,7 @@ function setupShadows(on, size) {
     sun.shadow.bias = -0.0004; sun.shadow.normalBias = bounds.radius * 0.002;
     cam.updateProjectionMatrix();
   }
-  if (viewer.getModel()) viewer.getModel().traverse((o) => { if (o.isMesh) { o.castShadow = on; o.receiveShadow = on; } });
+  if (viewer.getModel()) viewer.getModel().traverse((o) => { if (o.isMesh) { o.castShadow = on && !o.userData.isGlass; o.receiveShadow = on; } });
   if (ground) ground.visible = on;
 }
 

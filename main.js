@@ -189,6 +189,7 @@ function loadRhino(url, has2d) {
   rl.setLibraryPath('https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/');
   rl.load(url, (root) => {
     root.rotateX(-Math.PI / 2);
+    postProcessRhino(root);
     if (has2d) splitByScanLayer(root);
     finishLoad(root);
     if (has2d && scanGroup) setupScanSwitch();
@@ -201,6 +202,35 @@ function rhinoLayerName(obj, layers) {
   if (idx == null || !layers || !layers[idx]) return null;
   const l = layers[idx];
   return typeof l === 'string' ? l : (l.name || null);
+}
+
+function rhinoLayers(root) {
+  return (root.userData && (root.userData.layers || (root.userData.document && root.userData.document.layers))) || null;
+}
+
+// Rhino-Nachbearbeitung:
+//  - Linien/Kurven/Punkte NICHT zeichnen (z. B. Pläne/Planköpfe, Bemaßung)
+//  - Glas-Material auf Layern, deren Name "glas"/"glass" enthält
+function postProcessRhino(root) {
+  const layers = rhinoLayers(root);
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0xbfe0ee, metalness: 0, roughness: 0.06, transmission: 0.0,
+    transparent: true, opacity: 0.26, side: THREE.DoubleSide, depthWrite: false,
+  });
+  const remove = [];
+  root.traverse((o) => {
+    if (o.isLine || o.isLineSegments || o.isPoints) { remove.push(o); return; }
+    if (o.isMesh) {
+      const n = rhinoLayerName(o, layers);
+      const ln = n ? String(n).toLowerCase() : '';
+      if (ln.includes('glas') || ln.includes('glaß')) {
+        o.material = glassMat;
+        o.userData.isGlass = true;
+        o.renderOrder = 2;
+      }
+    }
+  });
+  remove.forEach((o) => { if (o.parent) o.parent.remove(o); o.geometry && o.geometry.dispose(); });
 }
 function splitByScanLayer(root) {
   const layers = (root.userData && (root.userData.layers
