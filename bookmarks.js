@@ -18,7 +18,7 @@ css.textContent = `
     position: fixed; left: 0; top: 92px; width: 240px; max-width: 80vw; max-height: calc(100vh - 200px); z-index: 28;
     background: rgba(16,19,24,.96); backdrop-filter: blur(10px); border:1px solid rgba(255,255,255,.08);
     border-left:0; border-radius:0 12px 12px 0; display:none; flex-direction:column; overflow:hidden;
-    color:#e8edf2; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; box-shadow:0 12px 40px rgba(0,0,0,.45);
+    color:#e8edf2; font-family:var(--font); box-shadow:0 12px 40px rgba(0,0,0,.45);
   }
   #bm-panel.open { display:flex; }
   #bm-hd { display:flex; align-items:center; justify-content:space-between; padding:11px 13px; border-bottom:1px solid rgba(255,255,255,.08); }

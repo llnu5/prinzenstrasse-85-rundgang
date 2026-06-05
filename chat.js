@@ -17,7 +17,7 @@ css.textContent = `
     position: fixed; right: 0; top: 92px; bottom: 14px; width: 300px; max-width: 88vw; z-index: 28;
     background: rgba(16,19,24,.96); backdrop-filter: blur(10px); border:1px solid rgba(255,255,255,.08);
     border-right:0; border-radius: 12px 0 0 12px; display: none; flex-direction: column; overflow: hidden;
-    color:#e8edf2; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; box-shadow:0 12px 40px rgba(0,0,0,.45);
+    color:#e8edf2; font-family:var(--font); box-shadow:0 12px 40px rgba(0,0,0,.45);
   }
   #chat-panel.open { display: flex; }
   #chat-hd { display:flex; align-items:center; justify-content:space-between; gap:8px;

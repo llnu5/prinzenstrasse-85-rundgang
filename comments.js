@@ -29,7 +29,7 @@ css.textContent = `
     display: flex; align-items: center; justify-content: center;
   }
   .cmt-pin .ini { transform: rotate(-45deg); color: #1a1a1a; font-weight: 700; font-size: 12px;
-    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+    font-family: var(--font); }
   .cmt-pin.resolved .bubble { background: #4caf6a; }
   .cmt-pin.active .bubble { box-shadow: 0 0 0 3px rgba(78,161,255,.9); }
   .cmt-pin .cnt { position: absolute; top: -6px; right: -6px; background: #2a323d; color:#fff;
@@ -40,7 +40,7 @@ css.textContent = `
     position: fixed; z-index: 40; background: rgba(20,24,30,.97); backdrop-filter: blur(10px);
     border: 1px solid rgba(255,255,255,.1); border-radius: 12px; color: #e8edf2;
     width: 300px; max-width: calc(100vw - 24px); box-shadow: 0 12px 40px rgba(0,0,0,.5);
-    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 13px;
+    font-family: var(--font); font-size: 13px;
   }
   .cmt-card .hd { display:flex; align-items:center; justify-content:space-between; gap:8px;
     padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }
@@ -79,7 +79,7 @@ css.textContent = `
     position: fixed; top:0; right:0; height:100%; width:320px; max-width:86vw; z-index:30;
     background: rgba(16,19,24,.96); backdrop-filter: blur(10px); border-left:1px solid rgba(255,255,255,.08);
     transform: translateX(100%); transition: transform .25s ease; display:flex; flex-direction:column;
-    color:#e8edf2; font-family:-apple-system,"Segoe UI",Roboto,sans-serif;
+    color:#e8edf2; font-family:var(--font);
   }
   #cmt-sidebar.open { transform: translateX(0); }
   #cmt-sidebar .sb-hd { padding:14px 14px 10px; border-bottom:1px solid rgba(255,255,255,.08); }
@@ -112,7 +112,7 @@ css.textContent = `
   #cmt-name { position: fixed; top:14px; right:14px; z-index:25;
     background: rgba(16,19,24,.82); backdrop-filter: blur(8px); border:1px solid rgba(255,255,255,.08);
     border-radius:10px; color:#cdd5de; font-size:12.5px; padding:7px 11px; cursor:pointer; user-select:none;
-    display:flex; align-items:center; gap:7px; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; }
+    display:flex; align-items:center; gap:7px; font-family:var(--font); }
   #cmt-name:hover { color:#fff; }
   #cmt-name .av { width:20px; height:20px; border-radius:50%; background:#3b82f6; color:#fff;
     font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
@@ -120,7 +120,7 @@ css.textContent = `
   body.cmt-placing #app, body.cmt-placing canvas { cursor: crosshair !important; }
   #cmt-hint { position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:25;
     background:rgba(59,130,246,.95); color:#fff; padding:8px 16px; border-radius:20px; font-size:13px;
-    font-family:-apple-system,"Segoe UI",Roboto,sans-serif; box-shadow:0 4px 16px rgba(0,0,0,.4);
+    font-family:var(--font); box-shadow:0 4px 16px rgba(0,0,0,.4);
     display:none; pointer-events:none; }
   body.cmt-placing #cmt-hint { display:block; }
 
@@ -129,7 +129,7 @@ css.textContent = `
     display:none; align-items:center; justify-content:center; }
   #cmt-modal.open { display:flex; }
   #cmt-modal .box { background:#161b22; border:1px solid rgba(255,255,255,.12); border-radius:14px;
-    padding:22px; width:340px; max-width:90vw; color:#e8edf2; font-family:-apple-system,"Segoe UI",Roboto,sans-serif;
+    padding:22px; width:340px; max-width:90vw; color:#e8edf2; font-family:var(--font);
     box-shadow:0 20px 60px rgba(0,0,0,.6); }
   #cmt-modal h3 { font-size:16px; margin-bottom:6px; }
   #cmt-modal p { font-size:12.5px; color:#8a94a0; margin-bottom:14px; }

@@ -116,7 +116,7 @@ loader.load(
   },
   (xhr) => {
     if (xhr.lengthComputable) {
-      const p = Math.round((xhr.loaded / xhr.total) * 100);
+      const p = Math.min(100, Math.round((xhr.loaded / xhr.total) * 100));
       barfill.style.width = p + '%';
       pctEl.innerHTML = p + '&nbsp;%';
     } else {
