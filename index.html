@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Prinzenstraße 85 – 3D Rundgang</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root { --accent: #4ea1ff; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0d10; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    #app { position: fixed; inset: 0; }
+    canvas { display: block; outline: none; }
+
+    /* Ladebildschirm */
+    #loader {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 22px;
+      background: radial-gradient(circle at 50% 40%, #161a20, #0b0d10); z-index: 50;
+      color: #e8edf2; transition: opacity .6s ease; text-align: center; padding: 24px;
+    }
+    #loader.hidden { opacity: 0; pointer-events: none; }
+    #loader h1 { font-size: 19px; font-weight: 600; letter-spacing: .3px; }
+    #loader .sub { font-size: 13px; color: #8a94a0; margin-top: -10px; }
+    .bar { width: min(320px, 70vw); height: 5px; background: #232a33; border-radius: 4px; overflow: hidden; }
+    .bar > i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width .25s ease; }
+    #pct { font-size: 12px; color: #8a94a0; font-variant-numeric: tabular-nums; }
+
+    /* HUD */
+    #hud {
+      position: fixed; left: 16px; bottom: 16px; z-index: 20;
+      background: rgba(16,19,24,.82); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
+      padding: 12px 14px; color: #cdd5de; font-size: 12.5px; line-height: 1.65;
+      max-width: 260px; user-select: none; transition: opacity .3s;
+    }
+    #hud b { color: #fff; }
+    #hud .key { display: inline-block; min-width: 16px; text-align: center;
+      padding: 1px 6px; margin: 0 1px; background: #2a323d; border-radius: 5px;
+      border: 1px solid rgba(255,255,255,.08); font-family: ui-monospace, monospace; font-size: 11px; color: #e8edf2; }
+    #hud .hint { color: #828c97; margin-top: 6px; font-size: 11.5px; }
+    #hud.collapsed .body { display: none; }
+    #hud .title { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; font-weight: 600; color: #fff; }
+    #hud .toggle { color: #7b8590; font-size: 11px; }
+
+    /* Top bar */
+    #topbar {
+      position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 20;
+      display: flex; gap: 8px; align-items: center;
+    }
+    .btn {
+      background: rgba(16,19,24,.82); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 10px;
+      color: #cdd5de; font-size: 12.5px; padding: 8px 13px; cursor: pointer;
+      transition: background .15s, color .15s; white-space: nowrap;
+    }
+    .btn:hover { background: rgba(40,48,58,.9); color: #fff; }
+    .btn.active { border-color: var(--accent); color: #fff; }
+
+    /* Speed-Anzeige */
+    #speedbadge {
+      position: fixed; right: 16px; bottom: 16px; z-index: 20;
+      background: rgba(16,19,24,.82); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 10px;
+      color: #cdd5de; font-size: 12px; padding: 7px 12px; user-select: none;
+      font-variant-numeric: tabular-nums;
+    }
+    #crosshair {
+      position: fixed; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px;
+      border-radius: 50%; background: rgba(255,255,255,.55); z-index: 15; pointer-events: none;
+      opacity: 0; transition: opacity .15s;
+    }
+    body.looking #crosshair { opacity: 1; }
+    #err { position: fixed; inset: auto 0 0 0; background:#7a1f1f; color:#fff; padding:10px 14px; font-size:13px; z-index:60; display:none; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="crosshair"></div>
+
+  <div id="loader">
+    <h1>Prinzenstraße 85 · 3D&nbsp;Rundgang</h1>
+    <div class="sub">Modell wird geladen …</div>
+    <div class="bar"><i id="barfill"></i></div>
+    <div id="pct">0&nbsp;%</div>
+  </div>
+
+  <div id="topbar">
+    <button class="btn active" id="mode-walk" title="Frei fliegen mit WASD + rechter Maustaste">Fliegen (WASD)</button>
+    <button class="btn" id="mode-orbit" title="Modell umkreisen">Umkreisen</button>
+    <button class="btn" id="btn-reset" title="Ansicht zurücksetzen">Reset</button>
+  </div>
+
+  <div id="hud">
+    <div class="title" id="hud-title"><span>Steuerung</span><span class="toggle">ausblenden</span></div>
+    <div class="body">
+      <div id="hud-walk">
+        <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> bewegen</div>
+        <div><span class="key">Q</span><span class="key">E</span> runter / hoch</div>
+        <div><b>Rechte Maustaste halten</b> + Maus = umsehen</div>
+        <div><span class="key">Shift</span> schneller · <span class="key">Strg</span> langsamer</div>
+        <div class="hint">Mausrad = Geschwindigkeit anpassen</div>
+      </div>
+      <div id="hud-orbit" style="display:none">
+        <div><b>Linke Maustaste</b> ziehen = drehen</div>
+        <div><b>Rechte Maustaste</b> ziehen = verschieben</div>
+        <div>Mausrad = zoomen</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="speedbadge" style="display:none">Tempo: <b id="speedval">1.0</b>×</div>
+  <div id="err"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
