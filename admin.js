@@ -73,12 +73,12 @@ async function processRhino(file) {
     if ((l.name || '').trim().toLowerCase() === '3d_scan') has3dScan = true;
   }
 
-  let added = 0;
-  try { added = explodeInstances(rhino, doc); }
+  let res = { added: 0, skipped: 0 };
+  try { res = explodeInstances(rhino, doc) || res; }
   catch (e) { console.warn('[admin] Block-Auflösen fehlgeschlagen', e); }
 
   const bytes = doc.toByteArray();
-  return { has3dScan, bytes, added };
+  return { has3dScan, bytes, added: res.added, skipped: res.skipped };
 }
 
 // Instanz-Referenzen (Blöcke) rekursiv auflösen: Definitions-Geometrie geklont,
@@ -110,7 +110,7 @@ function explodeInstances(rhino, doc) {
   // Layer-Namen + Sichtbarkeit (Eigen-Ebene der Unterobjekte erhalten; ausgeblendete Instanzen überspringen)
   const layerName = {}, layerVisible = {};
   { const L = doc.layers(); for (let i = 0; i < L.count; i++) { const l = L.get(i); layerName[i] = (l.name || ''); layerVisible[i] = l.visible !== false; } }
-  let added = 0;
+  let added = 0, skipped = 0;
 
   function addSolid(g, layerIndex, xforms) {
     const mg = clone(g);                                   // <- klonen, sonst summieren sich Transformationen!
@@ -137,7 +137,7 @@ function explodeInstances(rhino, doc) {
       const memName = (layerName[memIdx] || '').toLowerCase();
       const eff = (memName === 'by parent' || memName === 'byparent' || memName === '') ? inheritedLayer : memIdx;
       if (g.constructor.name === 'InstanceReference') {
-        if (layerVisible[memIdx] === false) continue;         // verschachtelter Block in Rhino ausgeblendet
+        if (layerVisible[memIdx] === false) { skipped++; continue; }   // verschachtelter Block in Rhino ausgeblendet
         ex(g.parentIdefId, eff, [...xforms, g.xform], depth + 1);
       } else addSolid(g, eff, xforms);
     }
@@ -147,10 +147,10 @@ function explodeInstances(rhino, doc) {
     const g = o.geometry(); if (!g || g.constructor.name !== 'InstanceReference') continue;
     const li = o.attributes().layerIndex;
     if (directSolidLayers.has(li)) continue;               // Doppelung vermeiden
-    if (layerVisible[li] === false) continue;              // Instanz in Rhino ausgeblendet -> nicht zeigen
+    if (layerVisible[li] === false) { skipped++; continue; }   // Instanz in Rhino ausgeblendet -> nicht zeigen
     ex(g.parentIdefId, li, [g.xform], 1);
   }
-  return added;
+  return { added, skipped };
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +172,8 @@ $('upload-btn').addEventListener('click', async () => {
     const pr = await processRhino(file);
     has2d = pr.has3dScan;
     if (pr.bytes) uploadData = new Blob([pr.bytes], { type: 'model/3dm' });
-    console.log(`[admin] Rhino verarbeitet: ${pr.added} Solids aus Blöcken aufgelöst, 3D_Scan=${has2d}`);
+    console.log(`[admin BUILD 21] Rhino: ${pr.added} Solids aufgelöst · ${pr.skipped} ausgeblendete Blöcke übersprungen · 3D_Scan=${has2d}`);
+    setStatus(`Verarbeitet: ${pr.added} Solids · ${pr.skipped} versteckte Blöcke ausgelassen. Lade hoch …`);
   }
 
   const id = editing ? editing.id : crypto.randomUUID();

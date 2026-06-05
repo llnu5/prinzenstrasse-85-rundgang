@@ -279,7 +279,8 @@ function startLoad() {
     if (!p) { loadError('Projekt nicht gefunden.'); return; }
     projectData = p;
     document.title = p.name + ' · 3D Rundgang';
-    const url = window.STORAGE_BASE + p.file_path;
+    // Versions-Query bricht den CDN-/Browser-Cache nach einem Update auf
+    const url = window.STORAGE_BASE + p.file_path + '?v=' + (p.version || 1);
     if (p.type === 'rhino') loadRhino(url, !!p.has_2d_scan);
     else loadMatterportZip(url);
   }).catch((e) => loadError('Projekt konnte nicht geladen werden: ' + e.message));
