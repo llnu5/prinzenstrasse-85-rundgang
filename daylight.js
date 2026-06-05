@@ -22,7 +22,6 @@ const DEFAULTS = { time: 14, north: 0, quality: 'mittel' };
 let viewer, THREEref, scene, camera, renderer;
 let sun, hemi, sky, ground;
 let composer, ssaoPass;
-let pathTracer = null, ptLoading = false;
 let state = { ...DEFAULTS };
 let bounds;
 
@@ -87,16 +86,13 @@ panel.innerHTML = `
       </div>
       <div id="dl-qhint"></div>
     </div>
-    <button id="dl-save">In Projekt speichern</button>
+    <button id="dl-save" title="Tageszeit & Norden gelten automatisch für alle Besucher">Automatisch für alle gespeichert</button>
   </div>`;
-const ptStatus = document.createElement('div');
-ptStatus.id = 'dl-pt-status';
-
 const QHINTS = {
   einfach: 'Nur Beleuchtung, keine Schatten. Am schnellsten.',
   mittel: 'Weiche Schatten + Ambient Occlusion (Screenspace).',
   hoch: 'Hochauflösende Schatten + AO. Architektur-Render-Look, flüssig.',
-  ultra: 'Pfadtracing (echtes Raytracing). Baut sich progressiv auf – am besten für Standbilder; beim Bewegen unscharf.',
+  ultra: 'Maximale Raster-Qualität: Schatten + starkes AO + Supersampling (gestochen scharf). Etwas langsamer.',
 };
 
 // ---------------------------------------------------------------------------
@@ -135,7 +131,6 @@ function applySun() {
     u.turbidity.value = 6; u.rayleigh.value = isDay ? 2 : 0.3;
     u.mieCoefficient.value = 0.005; u.mieDirectionalG.value = 0.8;
   }
-  if (pathTracer) try { pathTracer.updateLights ? pathTracer.updateLights() : null; resetPT(); } catch (e) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -170,79 +165,67 @@ function ensureComposer() {
   composer.setSize(window.innerWidth, window.innerHeight);
 }
 
-async function setQuality(q) {
+function setPixelRatio(scale) {
+  const pr = Math.min((window.devicePixelRatio || 1) * scale, 3);
+  renderer.setPixelRatio(pr);
+  if (composer) { composer.setPixelRatio && composer.setPixelRatio(pr); composer.setSize(window.innerWidth, window.innerHeight); }
+}
+
+function setQuality(q) {
   state.quality = q;
   panel.querySelectorAll('#dl-quality button').forEach((b) => b.classList.toggle('on', b.dataset.q === q));
   panel.querySelector('#dl-qhint').textContent = QHINTS[q] || '';
-  disposePT();
-  ptStatus.style.display = 'none';
 
   if (q === 'einfach') {
     setupShadows(false);
+    setPixelRatio(1);
     viewer.setRenderHook(null);
   } else if (q === 'mittel') {
     setupShadows(true, 2048);
     ensureComposer();
+    if (ssaoPass) ssaoPass.kernelRadius = Math.min(48, Math.max(8, bounds.radius * 0.018));
+    renderer.toneMappingExposure = 0.9;
+    setPixelRatio(1);
     viewer.setRenderHook(() => composer.render());
   } else if (q === 'hoch') {
-    setupShadows(true, 4096);
+    // 4096-Shadowmaps fallen auf manchen GPUs aus (-> keine Schatten). Sichere 2048 + stärkeres AO.
+    setupShadows(true, 2048);
     ensureComposer();
+    if (ssaoPass) ssaoPass.kernelRadius = Math.min(72, Math.max(12, bounds.radius * 0.03));
+    renderer.toneMappingExposure = 0.95;
+    setPixelRatio(1);
     viewer.setRenderHook(() => composer.render());
   } else if (q === 'ultra') {
-    setupShadows(true, 4096);
-    await startPathTracer();
+    // maximaler Raster: Schatten + starkes AO + Supersampling (gestochen scharf)
+    setupShadows(true, 2048);
+    ensureComposer();
+    if (ssaoPass) ssaoPass.kernelRadius = Math.min(72, Math.max(12, bounds.radius * 0.03));
+    renderer.toneMappingExposure = 0.95;
+    setPixelRatio(1.5);
+    viewer.setRenderHook(() => composer.render());
   }
   applySun();
 }
 
 // ---------------------------------------------------------------------------
-//  Pfadtracer (Ultra) – best effort, mit Fallback
-// ---------------------------------------------------------------------------
-function resetPT() { if (pathTracer && pathTracer.updateCamera) pathTracer.updateCamera(); }
-function disposePT() {
-  if (pathTracer) { try { pathTracer.dispose && pathTracer.dispose(); } catch (e) {} pathTracer = null; }
-}
-async function startPathTracer() {
-  if (ptLoading) return;
-  ptLoading = true;
-  ptStatus.textContent = 'Pfadtracer wird geladen …'; ptStatus.style.display = 'block';
-  try {
-    const mod = await import('https://cdn.jsdelivr.net/npm/three-gpu-pathtracer@0.0.23/build/index.module.js');
-    const PT = mod.WebGLPathTracer;
-    if (!PT) throw new Error('WebGLPathTracer nicht gefunden');
-    pathTracer = new PT(renderer);
-    pathTracer.renderScale = 0.75;
-    pathTracer.setScene(scene, camera);
-    viewer.setRenderHook(() => {
-      if (!pathTracer) return;
-      if (viewer.getCameraMoved()) pathTracer.updateCamera();
-      pathTracer.renderSample();
-      const s = Math.round(pathTracer.samples || 0);
-      ptStatus.textContent = `Pfadtracing … ${s} Samples`;
-      ptStatus.style.display = s > 64 ? 'none' : 'block';
-    });
-  } catch (e) {
-    console.warn('[daylight] Pfadtracer nicht verfügbar, Fallback auf Hoch', e);
-    ptStatus.textContent = 'Pfadtracer nicht verfügbar – nutze „Hoch".';
-    setTimeout(() => (ptStatus.style.display = 'none'), 3000);
-    state.quality = 'hoch';
-    panel.querySelectorAll('#dl-quality button').forEach((b) => b.classList.toggle('on', b.dataset.q === 'hoch'));
-    ensureComposer(); viewer.setRenderHook(() => composer.render());
-  } finally { ptLoading = false; }
-}
-
-// ---------------------------------------------------------------------------
 //  Persistenz
 // ---------------------------------------------------------------------------
-let sb = null;
-async function save() {
-  if (!CONFIGURED || !PID) { alert('Speichern nur für hochgeladene Projekte möglich.'); return; }
+let sb = null, saveTimer = null;
+async function persist() {
+  if (!CONFIGURED || !PID) return false;
   if (!sb) sb = createClient(URL, KEY, { auth: { persistSession: false } });
-  const { error } = await sb.from('projects').update({ settings: { time: state.time, north: state.north, quality: state.quality } }).eq('id', PID);
+  // nur Tageszeit/Norden persistieren (gilt dann für alle Nutzer); Qualität bleibt clientseitig
+  const { error } = await sb.from('projects').update({ settings: { time: state.time, north: state.north } }).eq('id', PID);
+  return !error;
+}
+// Auto-Speichern (entprellt) – Änderungen gelten sofort für alle Nutzer
+function autosave() {
   const b = panel.querySelector('#dl-save');
-  if (error) { alert('Speichern fehlgeschlagen: ' + error.message); return; }
-  b.textContent = 'Gespeichert ✓'; b.classList.add('saved');
-  setTimeout(() => { b.textContent = 'In Projekt speichern'; b.classList.remove('saved'); }, 1800);
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    const ok = await persist();
+    if (ok) { b.textContent = 'Für alle gespeichert ✓'; b.classList.add('saved'); setTimeout(() => { b.textContent = 'Automatisch für alle gespeichert'; b.classList.remove('saved'); }, 1500); }
+  }, 500);
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +258,6 @@ function buildRig() {
 function wireUI() {
   document.getElementById('topbar').appendChild(btn);
   document.body.appendChild(panel);
-  document.body.appendChild(ptStatus);
 
   const timeEl = panel.querySelector('#dl-time'), timeV = panel.querySelector('#dl-time-v');
   const northEl = panel.querySelector('#dl-north'), northV = panel.querySelector('#dl-north-v');
@@ -287,8 +269,11 @@ function wireUI() {
   }
   timeEl.addEventListener('input', () => { state.time = +timeEl.value; timeV.textContent = fmtTime(state.time); applySun(); });
   northEl.addEventListener('input', () => { state.north = +northEl.value; northV.textContent = Math.round(state.north) + '°'; applySun(); });
+  // beim Loslassen automatisch für alle speichern
+  timeEl.addEventListener('change', autosave);
+  northEl.addEventListener('change', autosave);
   panel.querySelectorAll('#dl-quality button').forEach((b) => b.addEventListener('click', () => setQuality(b.dataset.q)));
-  panel.querySelector('#dl-save').addEventListener('click', save);
+  panel.querySelector('#dl-save').addEventListener('click', autosave);
   panel.querySelector('.min').addEventListener('click', () => { panel.classList.remove('open'); btn.classList.remove('active'); });
   btn.addEventListener('click', () => { const o = panel.classList.toggle('open'); btn.classList.toggle('active', o); });
 
@@ -304,7 +289,8 @@ function start() {
   // gespeicherte Einstellungen laden
   const proj = viewer.getProject && viewer.getProject();
   const s = (proj && proj.settings) || {};
-  state = { time: typeof s.time === 'number' ? s.time : DEFAULTS.time, north: typeof s.north === 'number' ? s.north : DEFAULTS.north, quality: s.quality || DEFAULTS.quality };
+  // Tageszeit/Norden aus DB (für alle Nutzer gleich). Qualität startet IMMER auf „Mittel" (AO).
+  state = { time: typeof s.time === 'number' ? s.time : DEFAULTS.time, north: typeof s.north === 'number' ? s.north : DEFAULTS.north, quality: 'mittel' };
 
   buildRig();
   wireUI();
