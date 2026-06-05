@@ -547,7 +547,10 @@ function setPlacing(v) {
   placing = v;
   document.body.classList.toggle('cmt-placing', v);
   btnAdd.classList.toggle('active', v);
+  if (v) window.dispatchEvent(new CustomEvent('tool:active', { detail: 'comment' }));
 }
+// anderes Werkzeug aktiv -> Kommentar-Platzierung beenden
+window.addEventListener('tool:active', (e) => { if (e.detail !== 'comment' && placing) setPlacing(false); });
 btnAdd.addEventListener('click', async () => {
   if (!CONFIGURED) { alert('Das Kommentar-Backend ist noch nicht eingerichtet (config.js).'); return; }
   if (!placing) await requireName();

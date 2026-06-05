@@ -40,3 +40,18 @@ create policy comments_all on public.comments for all using (true) with check (t
 -- Echtzeit-Synchronisierung aktivieren
 alter publication supabase_realtime add table public.threads;
 alter publication supabase_realtime add table public.comments;
+
+-- ---------------------------------------------------------------------------
+--  Messwerkzeug: dauerhafte Messstrecken (2 Punkte im 3D-Modell)
+-- ---------------------------------------------------------------------------
+create table if not exists public.measurements (
+  id          uuid primary key default gen_random_uuid(),
+  author      text,
+  ax double precision not null, ay double precision not null, az double precision not null,
+  bx double precision not null, by double precision not null, bz double precision not null,
+  created_at  timestamptz not null default now()
+);
+alter table public.measurements enable row level security;
+drop policy if exists measurements_all on public.measurements;
+create policy measurements_all on public.measurements for all using (true) with check (true);
+alter publication supabase_realtime add table public.measurements;

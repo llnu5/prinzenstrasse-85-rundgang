@@ -257,7 +257,7 @@ document.getElementById('hud-title').addEventListener('click', () => {
 // ---------------------------------------------------------------------------
 const up = new THREE.Vector3(0, 1, 0);
 const _ray = new THREE.Raycaster();
-let frameCallback = null;       // wird jeden Frame aufgerufen (Pin-Positionen)
+const frameCallbacks = [];      // werden jeden Frame aufgerufen (Pins, Mess-Labels…)
 let tween = null;               // sanftes Anfliegen einer Stelle
 
 // NDC (-1..1) -> Treffer auf dem Modell oder null
@@ -322,7 +322,8 @@ window.viewer = {
   isWalkMode: () => mode === 'walk',
   isLooking: () => looking,
   raycastModel, worldToScreen, isOccluded, flyTo,
-  setFrameCallback: (fn) => { frameCallback = fn; },
+  addFrameCallback: (fn) => { frameCallbacks.push(fn); },
+  setFrameCallback: (fn) => { frameCallbacks.push(fn); }, // additiv (Rückwärtskompatibilität)
 };
 
 // ---------------------------------------------------------------------------
@@ -363,7 +364,7 @@ function animate() {
     orbit.update();
   }
 
-  if (frameCallback) frameCallback();
+  for (let i = 0; i < frameCallbacks.length; i++) frameCallbacks[i]();
   renderer.render(scene, camera);
 }
 animate();
