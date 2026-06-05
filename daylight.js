@@ -37,7 +37,7 @@ function defaults() {
   return {
     time: 14, north: 0,
     post: {
-      shadows: true, shadowRes: 2048, supersample: 1,
+      shadows: true, shadowRes: 2048, supersample: 1, ambient: 0.25,
       ao: { on: true, radius: 16 },
       bloom: { on: false, strength: 0.35, threshold: 0.85, radius: 0.4 },
       dof: { on: false, focus: 0, aperture: 2, maxblur: 0.01 },
@@ -51,7 +51,7 @@ function defaults() {
 }
 
 let viewer, scene, camera, renderer, bounds;
-let sun, hemi, sky, ground;
+let sun, hemi, sky, ground, amb;
 let composer = null;
 let cfg = defaults();
 
@@ -117,9 +117,10 @@ panel.innerHTML = `
   <div id="dl-hd"><h2>☀️ Licht & Post-Processing</h2><span class="min" title="Minimieren">–</span></div>
   <div id="dl-body">
     <div class="dl-sec">
-      <div class="h">Sonne</div>
+      <div class="h">Sonne & Licht</div>
       ${slider('dl-time', 'Tageszeit', 0, 24, 0.25, 14, 'time')}
       ${slider('dl-north', 'Norden', 0, 360, 1, 0, '°')}
+      ${slider('dl-ambient', 'Umgebungslicht', 0, 2, 0.05, 0.25, '')}
     </div>
 
     <div class="dl-sec">
@@ -278,7 +279,8 @@ function buildComposer() {
   viewer.setRenderHook(() => composer.render());
 }
 
-function applyAll() { applyTone(); applyShadows(); applySupersample(); buildComposer(); applySun(); }
+function applyAmbient() { if (amb) amb.intensity = cfg.post.ambient; }
+function applyAll() { applyTone(); applyShadows(); applySupersample(); applyAmbient(); buildComposer(); applySun(); }
 
 // ---------------------------------------------------------------------------
 //  Presets
@@ -303,7 +305,7 @@ function setSlider(id, v, unit) { const el = $(id); if (!el) return; el.value = 
 
 function writeInputs() {
   const p = cfg.post;
-  setSlider('dl-time', cfg.time, 'time'); setSlider('dl-north', cfg.north, '°');
+  setSlider('dl-time', cfg.time, 'time'); setSlider('dl-north', cfg.north, '°'); setSlider('dl-ambient', p.ambient, '');
   setTog('dl-shadows', p.shadows); $('dl-shadowRes').value = String(p.shadowRes); $('dl-supersample').value = String(p.supersample);
   setTog('dl-ao', p.ao.on); setSlider('dl-ao-radius', p.ao.radius, '');
   setTog('dl-bloom', p.bloom.on); setSlider('dl-bloom-strength', p.bloom.strength, ''); setSlider('dl-bloom-threshold', p.bloom.threshold, ''); setSlider('dl-bloom-radius', p.bloom.radius, '');
@@ -316,7 +318,7 @@ function writeInputs() {
 }
 function readInputs() {
   const p = cfg.post;
-  cfg.time = +$('dl-time').value; cfg.north = +$('dl-north').value;
+  cfg.time = +$('dl-time').value; cfg.north = +$('dl-north').value; p.ambient = +$('dl-ambient').value;
   p.shadows = $('dl-shadows-tog').classList.contains('on'); p.shadowRes = +$('dl-shadowRes').value; p.supersample = +$('dl-supersample').value;
   p.ao.on = $('dl-ao-tog').classList.contains('on'); p.ao.radius = +$('dl-ao-radius').value;
   p.bloom.on = $('dl-bloom-tog').classList.contains('on'); p.bloom.strength = +$('dl-bloom-strength').value; p.bloom.threshold = +$('dl-bloom-threshold').value; p.bloom.radius = +$('dl-bloom-radius').value;
@@ -372,6 +374,7 @@ function buildRig() {
   scene.children.filter((o) => o.name === 'daylight' || o.name === 'baselight').forEach((o) => scene.remove(o));
   scene.background = null;
   hemi = new THREE.HemisphereLight(0xdfeaff, 0x9a8f80, 1.0); scene.add(hemi);
+  amb = new THREE.AmbientLight(0xffffff, cfg.post.ambient); scene.add(amb);
   sun = new THREE.DirectionalLight(0xffffff, 2.0); scene.add(sun); scene.add(sun.target);
   sky = new Sky(); sky.scale.setScalar(Math.max(2000, bounds.radius * 100)); scene.add(sky);
   const g = new THREE.Mesh(new THREE.PlaneGeometry(bounds.radius * 8, bounds.radius * 8), new THREE.ShadowMaterial({ opacity: 0.32 }));
