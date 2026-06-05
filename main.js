@@ -40,6 +40,9 @@ scene.add(baseHemi, dir, dir2);
 let model = null;
 let modelCenter = new THREE.Vector3();
 let modelRadius = 10;
+let modelBox = new THREE.Box3();
+let litModel = false;          // true bei Rhino/CAD (beleuchtet) -> Daylight-Panel
+let projectData = null;        // geladene Projekt-Zeile (inkl. settings)
 const home = { pos: new THREE.Vector3(), target: new THREE.Vector3() };
 let mode = 'walk';            // 'walk' | 'orbit'
 
@@ -83,9 +86,9 @@ function addDaylight() {
   scene.background = new THREE.Color(0xdfe7ef);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
-  const hemi = new THREE.HemisphereLight(0xdfeaff, 0x9a8f80, 1.2);
-  const sun = new THREE.DirectionalLight(0xfff3e2, 2.4); sun.position.set(8, 16, 6);
-  const fill = new THREE.DirectionalLight(0xbfd4ff, 0.5); fill.position.set(-10, 6, -8);
+  const hemi = new THREE.HemisphereLight(0xdfeaff, 0x9a8f80, 1.2); hemi.name = 'daylight';
+  const sun = new THREE.DirectionalLight(0xfff3e2, 2.4); sun.position.set(8, 16, 6); sun.name = 'daylight';
+  const fill = new THREE.DirectionalLight(0xbfd4ff, 0.5); fill.position.set(-10, 6, -8); fill.name = 'daylight';
   scene.add(hemi, sun, fill);
 }
 
@@ -115,6 +118,7 @@ function finishLoad(root) {
   model.updateMatrixWorld(true);
   scene.add(model);
   const box = robustModelBox(model);
+  modelBox = box.clone();
   box.getCenter(modelCenter);
   const size = box.getSize(new THREE.Vector3());
   modelRadius = Math.max(size.x, size.y, size.z) * 0.5 || 5;
@@ -137,6 +141,7 @@ const draco = new DRACOLoader();
 draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/');
 const gltfLoader = new GLTFLoader(); gltfLoader.setDRACOLoader(draco);
 function loadGLB(url) {
+  litModel = false;
   gltfLoader.load(url, (g) => { const r = g.scene; r.rotateX(-Math.PI / 2); applyUnlit(r); finishLoad(r); },
     (x) => setProgress(x.loaded, x.lengthComputable ? x.total : 0),
     () => loadError('Fehler beim Laden des Modells. Bitte über HTTPS öffnen, nicht per Doppelklick.'));
@@ -145,6 +150,7 @@ function loadGLB(url) {
 // --- Matterport-ZIP (OBJ + Texturen direkt im Browser) ---
 const baseName = (p) => p.split(/[\\/]/).pop().toLowerCase();
 async function loadMatterportZip(url) {
+  litModel = false;
   try {
     if (subEl) subEl.textContent = 'Lade & entpacke Scan …';
     const res = await fetch(url);
@@ -176,6 +182,7 @@ async function loadMatterportZip(url) {
 
 // --- Rhino .3dm ---
 function loadRhino(url, has2d) {
+  litModel = true;
   if (subEl) subEl.textContent = 'Lade Rhino-Modell …';
   addDaylight();
   const rl = new Rhino3dmLoader();
@@ -236,6 +243,7 @@ function startLoad() {
   }).then((r) => r.json()).then((rows) => {
     const p = rows && rows[0];
     if (!p) { loadError('Projekt nicht gefunden.'); return; }
+    projectData = p;
     document.title = p.name + ' · 3D Rundgang';
     const url = window.STORAGE_BASE + p.file_path;
     if (p.type === 'rhino') loadRhino(url, !!p.has_2d_scan);
@@ -393,6 +401,10 @@ const up = new THREE.Vector3(0, 1, 0);
 const _ray = new THREE.Raycaster();
 const frameCallbacks = [];      // werden jeden Frame aufgerufen (Pins, Mess-Labels…)
 let tween = null;               // sanftes Anfliegen einer Stelle
+let renderHook = null;          // optionales Rendering (Postprocessing/Pfadtracer)
+let cameraMoved = false;        // Kamera hat sich diesen Frame bewegt (für Pfadtracer)
+const _prevCamPos = new THREE.Vector3();
+const _prevCamQuat = new THREE.Quaternion();
 
 // NDC (-1..1) -> Treffer auf dem Modell oder null
 function raycastModel(ndcX, ndcY) {
@@ -471,6 +483,11 @@ window.viewer = {
   raycastModel, worldToScreen, isOccluded, flyTo, flyToPose, getPose,
   addFrameCallback: (fn) => { frameCallbacks.push(fn); },
   setFrameCallback: (fn) => { frameCallbacks.push(fn); }, // additiv (Rückwärtskompatibilität)
+  isLit: () => litModel,
+  getBounds: () => ({ center: modelCenter.clone(), radius: modelRadius, box: modelBox.clone() }),
+  getProject: () => projectData,
+  setRenderHook: (fn) => { renderHook = fn; },             // null = Standard-Rendering
+  getCameraMoved: () => cameraMoved,                       // für Pfadtracer-Reset
 };
 
 // ---------------------------------------------------------------------------
@@ -520,8 +537,11 @@ function animate() {
     orbit.update();
   }
 
+  cameraMoved = !_prevCamPos.equals(camera.position) || !_prevCamQuat.equals(camera.quaternion);
+  _prevCamPos.copy(camera.position); _prevCamQuat.copy(camera.quaternion);
+
   for (let i = 0; i < frameCallbacks.length; i++) frameCallbacks[i]();
-  renderer.render(scene, camera);
+  if (renderHook) renderHook(dt); else renderer.render(scene, camera);
 }
 animate();
 
