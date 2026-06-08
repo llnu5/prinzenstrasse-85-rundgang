@@ -226,7 +226,7 @@ async function convertToGLB(rhinoBytes, texImages) {
     }
   } catch (e) { console.warn('[admin] Material→Textur-Map fehlgeschlagen', e); }
 
-  const texCache = {}; const MAX_TEX = 2048;
+  const texCache = {}; const MAX_TEX = 1024;   // 1024 statt 2048: hält viele Scan-Kacheln unter Supabase-Free-Limit (50 MB)
   function getTexture(base) {
     if (!base || !texImages || !texImages[base]) return null;
     if (!texCache[base]) {
