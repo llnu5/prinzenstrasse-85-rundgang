@@ -151,6 +151,7 @@ def collect(raw):
         sel_ids = set([str(o.Id) for o in doc.Objects if o.IsSelected(False)])
 
     def layer_allowed(lname):
+        if is_scan_layer(lname): return True          # Scan-Layer IMMER mit (auch wenn in Rhino aus)
         if layers_ok is not None and lname not in layers_ok: return False
         return True
 
@@ -193,7 +194,11 @@ def collect(raw):
             else:
                 add_object(mo, comb, inherit_layer)
 
-    for obj in doc.Objects:
+    # VOLLE Enumeration inkl. ausgeblendeter Objekte -> sonst fehlt z.B. der ausgeschaltete 3D-Scan-Layer!
+    st = Rhino.DocObjects.ObjectEnumeratorSettings()
+    st.NormalObjects = True; st.HiddenObjects = True; st.LockedObjects = True
+    st.IncludeLights = False; st.IncludeGrips = False; st.DeletedObjects = False
+    for obj in doc.Objects.GetObjectList(st):
         if not obj.IsValid: continue
         if obj.Geometry is None: continue
         if sel_ids is not None and str(obj.Id) not in sel_ids: continue
@@ -408,7 +413,7 @@ def do_publish():
     for l in doc.Layers:
         if l.IsDeleted: continue
         all_layers.append(l.Name)
-        if l.IsVisible: visible.append(l.Name)
+        if l.IsVisible or is_scan_layer(l.Name): visible.append(l.Name)   # Scan-Layer vorausgewaehlt, auch wenn aus
     picked = rs.MultiListBox(all_layers, 'Layer einbeziehen (Standard: sichtbare). 3D-Scan-Layer separat erkannt.', 'Publish: Layer', visible)
     if picked is None: return
     OPT['layers'] = set(picked)
