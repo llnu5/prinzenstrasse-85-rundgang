@@ -349,33 +349,33 @@ def _err_text(we):
     except: return str(we)
 
 def rest_get(path):
-    req=HttpWebRequest(System.Uri(REST_BASE+path)); req.Method='GET'; _auth(req)
+    req=System.Net.WebRequest.Create(System.Uri(REST_BASE+path)); req.Method='GET'; _auth(req)
     try: return json.loads(_read(req))
     except Exception as e: log('REST GET: %s' % e); return None
 def rest_json(path, method, row):
     body=Encoding.UTF8.GetBytes(json.dumps(row))
-    req=HttpWebRequest(System.Uri(REST_BASE+path)); req.Method=method; _auth(req)
+    req=System.Net.WebRequest.Create(System.Uri(REST_BASE+path)); req.Method=method; _auth(req)
     req.ContentType='application/json'; req.Headers.Add('Prefer','resolution=merge-duplicates,return=minimal')
     req.ContentLength=body.Length; st=req.GetRequestStream(); st.Write(body,0,body.Length); st.Close()
     try: _read(req); return True
     except WebException as we: log('REST %s: %s' % (method,_err_text(we))); return False
     except Exception as e: log('REST %s: %s' % (method,e)); return False
 def rest_delete(path):
-    req=HttpWebRequest(System.Uri(REST_BASE+path)); req.Method='DELETE'; _auth(req)
+    req=System.Net.WebRequest.Create(System.Uri(REST_BASE+path)); req.Method='DELETE'; _auth(req)
     try: _read(req); return True
     except WebException as we: log('REST DELETE: %s' % _err_text(we)); return False
     except Exception as e: log('REST DELETE: %s' % e); return False
 
 def storage_upload(path, data, content_type):
     body=System.Array[System.Byte](bytearray(data))
-    req=HttpWebRequest(System.Uri(STORAGE_BASE+'/models/'+path)); req.Method='POST'; _auth(req)
+    req=System.Net.WebRequest.Create(System.Uri(STORAGE_BASE+'/models/'+path)); req.Method='POST'; _auth(req)
     req.Headers.Add('x-upsert','true'); req.ContentType=content_type; req.ContentLength=body.Length
     try:
         st=req.GetRequestStream(); st.Write(body,0,body.Length); st.Close(); _read(req); return None
     except WebException as we: return _err_text(we)
     except Exception as e: return str(e)
 def storage_delete(path):
-    req=HttpWebRequest(System.Uri(STORAGE_BASE+'/models/'+path)); req.Method='DELETE'; _auth(req)
+    req=System.Net.WebRequest.Create(System.Uri(STORAGE_BASE+'/models/'+path)); req.Method='DELETE'; _auth(req)
     try: _read(req); return True
     except: return False
 
