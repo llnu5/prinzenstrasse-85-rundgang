@@ -202,8 +202,17 @@ def collect(raw):
         if not obj.IsValid: continue
         if obj.Geometry is None: continue
         if sel_ids is not None and str(obj.Id) not in sel_ids: continue
+        lname = layer_name_of(obj)
+        scan = is_scan_layer(lname)
+        # Volle Enumeration zieht auch _Hide-Geometrie (andere Geschosse weit weg) rein ->
+        # einzeln ausgeblendete / auf unsichtbarem Layer liegende NICHT-Scan-Objekte ueberspringen.
+        if not scan:
+            try:
+                li = obj.Attributes.LayerIndex
+                if obj.IsHidden or (li >= 0 and not doc.Layers[li].IsVisible):
+                    stats['hidden'] += 1; continue
+            except: pass
         if isinstance(obj, Rhino.DocObjects.InstanceObject):
-            lname = layer_name_of(obj)
             if is_hide_layer(lname): stats['hidden'] += 1; continue
             if not layer_allowed(lname): continue
             explode_instance(obj, Rhino.Geometry.Transform.Identity, lname)
