@@ -160,6 +160,32 @@ function explodeInstances(rhino, doc) {
 // ---------------------------------------------------------------------------
 function setStatus(t, ok) { const s = $('status'); s.textContent = t; s.style.color = ok ? 'var(--green)' : 'var(--label2)'; }
 
+// Upload: kleine Dateien Standard, große stückweise (resumable/TUS) -> robust & größer
+async function uploadToStorage(path, data, contentType) {
+  if (data.size <= 6 * 1024 * 1024) {
+    const { error } = await sb.storage.from('models').upload(path, data, { upsert: true, contentType });
+    return error ? error.message : null;
+  }
+  try {
+    const tus = await import('https://cdn.jsdelivr.net/npm/tus-js-client@4.1.0/+esm');
+    const Upload = tus.Upload || (tus.default && tus.default.Upload);
+    return await new Promise((resolve) => {
+      const up = new Upload(data, {
+        endpoint: `${URL}/storage/v1/upload/resumable`,
+        retryDelays: [0, 2000, 5000, 10000, 20000],
+        headers: { authorization: `Bearer ${KEY}`, apikey: KEY, 'x-upsert': 'true' },
+        uploadDataDuringCreation: true, removeFingerprintOnSuccess: true,
+        chunkSize: 6 * 1024 * 1024,
+        metadata: { bucketName: 'models', objectName: path, contentType, cacheControl: '3600' },
+        onError: (e) => resolve((e && e.message) || String(e)),
+        onProgress: (sent, total) => setStatus(`Lade hoch … ${Math.round((sent / total) * 100)} % (${(total / 1048576).toFixed(0)} MB)`),
+        onSuccess: () => resolve(null),
+      });
+      up.findPreviousUploads().then((prev) => { if (prev.length) up.resumeFromPreviousUpload(prev[0]); up.start(); });
+    });
+  } catch (e) { return (e && e.message) || String(e); }
+}
+
 $('upload-btn').addEventListener('click', async () => {
   const name = $('pname').value.trim();
   if (!name) { alert('Bitte Projektnamen eingeben.'); return; }
@@ -174,7 +200,7 @@ $('upload-btn').addEventListener('click', async () => {
     const pr = await processRhino(file);
     has2d = pr.has3dScan;
     if (pr.bytes) uploadData = new Blob([pr.bytes], { type: 'model/3dm' });
-    console.log(`[admin BUILD 22] Rhino: ${pr.added} Solids aufgelöst · ${pr.skipped} ausgeblendete Blöcke übersprungen · 3D_Scan=${has2d}`);
+    console.log(`[admin BUILD 23] Rhino: ${pr.added} Solids aufgelöst · ${pr.skipped} ausgeblendete Blöcke übersprungen · 3D_Scan=${has2d}`);
     setStatus(`Verarbeitet: ${pr.added} Solids · ${pr.skipped} versteckte Blöcke ausgelassen. Lade hoch …`);
   }
 
@@ -183,8 +209,8 @@ $('upload-btn').addEventListener('click', async () => {
   const path = `projects/${id}/model.${ext}`;
 
   setStatus(`Lade hoch (${(uploadData.size / 1048576).toFixed(0)} MB) … das kann dauern.`);
-  const { error: upErr } = await sb.storage.from('models').upload(path, uploadData, { upsert: true, contentType: type === 'rhino' ? 'model/3dm' : (file.type || 'application/zip') });
-  if (upErr) { setStatus('Upload fehlgeschlagen: ' + upErr.message); $('upload-btn').disabled = false; return; }
+  const upErr = await uploadToStorage(path, uploadData, type === 'rhino' ? 'model/3dm' : (file.type || 'application/zip'));
+  if (upErr) { setStatus('Upload fehlgeschlagen: ' + upErr); $('upload-btn').disabled = false; return; }
 
   if (editing) {
     const { error } = await sb.from('projects').update({
