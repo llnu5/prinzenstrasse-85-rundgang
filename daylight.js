@@ -447,6 +447,28 @@ function start() {
   writeInputs();
   applyAll();
   window.addEventListener('resize', () => { if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(window.innerWidth, window.innerHeight); } });
+
+  // Scan/CAD-Switch (main.js): Scan = flach/unlit auf weiß, kein Post. CAD = normal gerendert.
+  let toneBefore = renderer.toneMapping;
+  window.addEventListener('scan-mode', (e) => {
+    const scan = !!(e.detail && e.detail.scan);
+    if (scan) {
+      toneBefore = renderer.toneMapping;
+      viewer.setRenderHook(null);                     // Post-Processing aus -> direktes Rendering
+      renderer.toneMapping = THREE.NoToneMapping;     // Textur & Weiß 1:1 (unlit)
+      if (sky) sky.visible = false;
+      if (ground) ground.visible = false;
+      scene.environment = null;
+      scene.background = new THREE.Color(0xffffff);
+    } else {
+      renderer.toneMapping = toneBefore || THREE.ACESFilmicToneMapping;
+      if (sky) sky.visible = true;
+      if (ground) ground.visible = !!cfg.post.shadows;
+      scene.background = null;
+      updateEnvironment();                            // IBL zurück
+      buildComposer();                                // Post wieder aktiv
+    }
+  });
 }
 
 if (window.viewer && window.viewer.getModel && window.viewer.getModel()) start();

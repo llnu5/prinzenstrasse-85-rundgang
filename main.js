@@ -322,6 +322,8 @@ function setupScanSwitch() {
     const scan = b.dataset.v === 'scan';
     scanGroup.visible = scan; cadGroup.visible = !scan;
     seg.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+    // Scan-Modus: flach/unlit auf weiß, kein Post-Processing. CAD: normal gerendert.
+    window.dispatchEvent(new CustomEvent('scan-mode', { detail: { scan } }));
   }));
 }
 
