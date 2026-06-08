@@ -200,9 +200,7 @@ async function loadRhinoGLB(url, has2d) {
   } catch (e) { loadError('Modell konnte nicht geladen werden: ' + e.message); }
 }
 function processRhinoGLB(root, has2d) {
-  root.rotateX(-Math.PI / 2);
   const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xbfe0ee, metalness: 0, roughness: 0.06, transmission: 0.0, transparent: true, opacity: 0.26, side: THREE.DoubleSide, depthWrite: false });
-  scanGroup = new THREE.Group(); cadGroup = new THREE.Group();
   const sc = [], cd = [];
   root.traverse((o) => {
     if (!o.isMesh) return;
@@ -210,13 +208,18 @@ function processRhinoGLB(root, has2d) {
     if (o.userData && o.userData.gmat === 'glass') { o.material = glassMat; o.userData.isGlass = true; o.renderOrder = 2; }
     (o.userData && o.userData.grp === 'scan' ? sc : cd).push(o);
   });
-  sc.forEach((o) => scanGroup.attach(o));
-  cd.forEach((o) => cadGroup.attach(o));
-  root.add(scanGroup, cadGroup);
-  cadGroup.visible = true; scanGroup.visible = false;
-  if (sc.length === 0) scanGroup = null;
+  scanGroup = null; cadGroup = null;
+  // Nur gruppieren, wenn ein 3D_Scan existiert (Gruppen ZUERST anhängen, dann erst rotieren -> keine Doppel-Rotation)
+  if (has2d && sc.length > 0) {
+    scanGroup = new THREE.Group(); cadGroup = new THREE.Group();
+    root.add(scanGroup, cadGroup);
+    sc.forEach((o) => scanGroup.attach(o));
+    cd.forEach((o) => cadGroup.attach(o));
+    cadGroup.visible = true; scanGroup.visible = false;
+  }
+  root.rotateX(-Math.PI / 2);          // einmalige Drehung (Rhino Z-up -> Y-up), NACH dem Umhängen
   finishLoad(root);
-  if (has2d && scanGroup) setupScanSwitch();
+  if (scanGroup) setupScanSwitch();
 }
 
 function loadRhino(url, has2d) {
