@@ -46,6 +46,15 @@ let projectData = null;        // geladene Projekt-Zeile (inkl. settings)
 const home = { pos: new THREE.Vector3(), target: new THREE.Vector3() };
 let mode = 'walk';            // 'walk' | 'orbit'
 
+// --- Brennweite (Focal length): 35-mm-Vollformat, vertikales FOV ---
+let lensMM = 40;
+const lensToFov = (mm) => 2 * Math.atan(12 / mm) * 180 / Math.PI;
+function applyLens(mm) {
+  lensMM = Math.max(25, Math.min(150, mm));
+  camera.fov = lensToFov(lensMM);
+  camera.updateProjectionMatrix();
+}
+
 // ---------------------------------------------------------------------------
 //  Modell laden – je nach Projekt: Standard-GLB / Matterport-ZIP / Rhino-.3dm
 // ---------------------------------------------------------------------------
@@ -131,9 +140,11 @@ function finishLoad(root) {
     if (cam && cam.pos && cam.target) {
       home.pos.set(cam.pos[0], cam.pos[1], cam.pos[2]);
       home.target.set(cam.target[0], cam.target[1], cam.target[2]);
-      if (cam.fov) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
+      // Brennweite NICHT aus der Aufnahme – Start immer 40 mm (per Slider änderbar)
     }
   } catch (e) {}
+  applyLens(40);                 // Start-Brennweite immer 40 mm
+  setupLensControl();
   baseSpeed = Math.max(0.6, modelRadius * 0.12);
   camera.near = Math.max(0.01, modelRadius * 0.002);
   camera.far = modelRadius * 60;
@@ -318,6 +329,49 @@ function splitByScanLayer(root) {
   cadGroup.visible = true; scanGroup.visible = false;     // Standard: CAD-Ansicht
   if (scanGroup.children.length === 0) scanGroup = null;   // kein Scan erkennbar -> kein Switch
 }
+let lensUiDone = false;
+function setupLensControl() {
+  if (lensUiDone) return; lensUiDone = true;
+  const topbar = document.getElementById('topbar');
+  if (!topbar) return;
+  const css = document.createElement('style');
+  css.textContent = `
+    #lens-pop { position:fixed; display:none; z-index:30; width:230px; padding:13px 15px;
+      background:var(--mat-2); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+      border:1px solid var(--hairline); border-radius:14px; box-shadow:var(--shadow); color:var(--label); }
+    #lens-pop.open { display:block; }
+    #lens-pop .row { display:flex; justify-content:space-between; align-items:center; font-size:12.5px; color:var(--label2); margin-bottom:9px; }
+    #lens-pop .row b { color:var(--label); font-variant-numeric:tabular-nums; font-weight:600; }
+    #lens-slider { width:100%; accent-color:var(--blue); }
+    #lens-pop .ticks { display:flex; justify-content:space-between; font-size:10px; color:var(--label3); margin-top:4px; }`;
+  document.head.appendChild(css);
+
+  const sep = document.createElement('div'); sep.className = 'sep';
+  const btn = document.createElement('button'); btn.className = 'btn'; btn.id = 'lens-btn';
+  btn.setAttribute('data-tip', 'Focal length'); btn.setAttribute('aria-label', 'Focal length');
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/></svg><span>Lens</span>';
+  topbar.append(sep, btn);
+
+  const pop = document.createElement('div'); pop.id = 'lens-pop';
+  pop.innerHTML = '<div class="row"><span>Focal length</span><b id="lens-val">40 mm</b></div>' +
+    '<input id="lens-slider" type="range" min="25" max="150" step="1" value="40">' +
+    '<div class="ticks"><span>25</span><span>40</span><span>85</span><span>150</span></div>';
+  document.body.appendChild(pop);
+  const slider = pop.querySelector('#lens-slider'), valEl = pop.querySelector('#lens-val');
+  slider.addEventListener('input', () => { const mm = +slider.value; applyLens(mm); valEl.textContent = mm + ' mm'; });
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = pop.classList.toggle('open'); btn.classList.toggle('active', open);
+    if (open) {
+      const r = btn.getBoundingClientRect();
+      pop.style.left = Math.min(window.innerWidth - 240, Math.max(8, r.left + r.width / 2 - 115)) + 'px';
+      pop.style.top = (r.bottom + 10) + 'px';
+      slider.value = Math.round(lensMM); valEl.textContent = Math.round(lensMM) + ' mm';
+    }
+  });
+  document.addEventListener('click', (e) => { if (pop.classList.contains('open') && !pop.contains(e.target) && e.target !== btn) { pop.classList.remove('open'); btn.classList.remove('active'); } });
+}
+
 function setupScanSwitch() {
   const topbar = document.getElementById('topbar');
   const sep = document.createElement('div'); sep.className = 'sep';
