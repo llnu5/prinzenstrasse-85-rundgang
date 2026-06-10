@@ -810,8 +810,8 @@ def show_panel():
             if p['id'] == lk['id']: ver = int(p.get('version', 1)) + 1; break
         publish_core(lk['name'], lk['id'], ver)
     def on_new(s, e):
-        name = rs.GetString('New project name')
-        if not name: return
+        rc, name = Rhino.UI.Dialogs.ShowEditBox('New project', 'Project name:', '', False)
+        if not rc or not name or not name.strip(): return
         publish_core(name.strip(), str(uuid.uuid4()), 1)
     def sel_proj():
         i = projlist.SelectedIndex
