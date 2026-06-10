@@ -36,7 +36,7 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
-PLUGIN_VERSION = '1.0'
+PLUGIN_VERSION = '1.1'   # bump on every change so the user can see which build is running
 SUPABASE_URL = 'https://jjeoxzbfsnrnwpooabfw.supabase.co'
 SUPABASE_KEY = 'sb_publishable_l4hAdP8VzaJ23vAPnv3BgA_52LkRXta'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
