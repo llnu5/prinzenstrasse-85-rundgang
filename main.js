@@ -50,7 +50,7 @@ let mode = 'walk';            // 'walk' | 'orbit'
 let lensMM = 40;
 const lensToFov = (mm) => 2 * Math.atan(12 / mm) * 180 / Math.PI;
 function applyLens(mm) {
-  lensMM = Math.max(20, Math.min(150, mm));
+  lensMM = Math.max(12, Math.min(150, mm));
   camera.fov = lensToFov(lensMM);
   camera.updateProjectionMatrix();
 }
@@ -344,7 +344,8 @@ function setupLensControl() {
     #lens-pop .row { display:flex; justify-content:space-between; align-items:center; font-size:12.5px; color:var(--label2); margin-bottom:9px; }
     #lens-pop .row b { color:var(--label); font-variant-numeric:tabular-nums; font-weight:600; }
     #lens-slider { width:100%; accent-color:var(--blue); }
-    #lens-pop .ticks { display:flex; justify-content:space-between; font-size:10px; color:var(--label3); margin-top:4px; }`;
+    #lens-pop .ticks { position:relative; height:13px; font-size:10px; color:var(--label3); margin-top:4px; }
+    #lens-pop .ticks span { position:absolute; top:0; white-space:nowrap; }`;
   document.head.appendChild(css);
 
   const sep = document.createElement('div'); sep.className = 'sep';
@@ -353,10 +354,18 @@ function setupLensControl() {
   btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/></svg><span>Lens</span>';
   topbar.append(sep, btn);
 
+  const LMIN = 12, LMAX = 150;
+  // Ticks nach echtem Wert positionieren (Slider ist linear!) + ~14px Daumenbreite kompensieren
+  const tickHtml = [12, 35, 85, 150].map((v) => {
+    const pct = (v - LMIN) / (LMAX - LMIN) * 100;
+    const off = ((0.5 - pct / 100) * 14).toFixed(1);
+    const tx = v === LMIN ? '0' : v === LMAX ? '-100%' : '-50%';
+    return '<span style="left:calc(' + pct + '% + ' + off + 'px);transform:translateX(' + tx + ')">' + v + '</span>';
+  }).join('');
   const pop = document.createElement('div'); pop.id = 'lens-pop';
   pop.innerHTML = '<div class="row"><span>Focal length</span><b id="lens-val">40 mm</b></div>' +
-    '<input id="lens-slider" type="range" min="20" max="150" step="1" value="40">' +
-    '<div class="ticks"><span>20</span><span>40</span><span>85</span><span>150</span></div>';
+    '<input id="lens-slider" type="range" min="' + LMIN + '" max="' + LMAX + '" step="1" value="40">' +
+    '<div class="ticks">' + tickHtml + '</div>';
   document.body.appendChild(pop);
   const slider = pop.querySelector('#lens-slider'), valEl = pop.querySelector('#lens-val');
   slider.addEventListener('input', () => { const mm = +slider.value; applyLens(mm); valEl.textContent = mm + ' mm'; });
