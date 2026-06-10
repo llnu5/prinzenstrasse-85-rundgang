@@ -36,7 +36,7 @@ from System.Text import Encoding
 # ---------------------------------------------------------------------------
 #  KONFIG (oeffentliche Keys, RLS-geschuetzt -- identisch zur Web-App)
 # ---------------------------------------------------------------------------
-PLUGIN_VERSION = '1.2'   # bump on every change so the user can see which build is running
+PLUGIN_VERSION = '1.3'   # bump on every change so the user can see which build is running
 SUPABASE_URL = 'https://jjeoxzbfsnrnwpooabfw.supabase.co'
 SUPABASE_KEY = 'sb_publishable_l4hAdP8VzaJ23vAPnv3BgA_52LkRXta'
 STORAGE_BASE = SUPABASE_URL + '/storage/v1/object'
@@ -135,6 +135,49 @@ def material_color(obj):
         try: c = mat.DiffuseColor; return [c.R/255.0, c.G/255.0, c.B/255.0]
         except: pass
     return [0.8, 0.8, 0.8]
+
+def material_metal(obj):
+    """Metallisches Material erkennen -> (metalness, roughness, [r,g,b]) oder None.
+    Sonst bleibt das Metall im Browser schwarz, weil ein reines Metall seine Farbe
+    NUR aus der Umgebungsreflexion bezieht. Wir exportieren es als echtes PBR-Metall."""
+    mat = material_of(obj)
+    if not mat: return None
+    # 1) Rhino 7/8: echtes physically-based Material
+    try:
+        pbr = mat.PhysicallyBased
+        if pbr is None:
+            try: mat.ToPhysicallyBased(); pbr = mat.PhysicallyBased
+            except: pbr = None
+        if pbr is not None:
+            mtl = float(pbr.Metallic)
+            if mtl > 0.5:
+                try: rgh = float(pbr.Roughness)
+                except: rgh = 0.3
+                bc = pbr.BaseColor   # Color4f, Komponenten 0..1
+                col = [float(bc.R), float(bc.G), float(bc.B)]
+                # reines Schwarz als Basisfarbe -> auf neutrales Metallgrau anheben
+                if max(col) < 0.04: col = [0.9, 0.9, 0.9]
+                return (mtl, max(0.02, min(1.0, rgh)), col)
+    except: pass
+    # 2) Rhino 6 Fallback: klassische Reflectivity/Glanz
+    try:
+        refl = float(mat.Reflectivity)
+        if refl > 0.5:
+            try:
+                shine = float(mat.Shine); mx = float(Rhino.DocObjects.Material.MaxShine)
+                rgh = max(0.02, 1.0 - (shine / mx if mx > 0 else 0.0))
+            except: rgh = 0.3
+            col = None
+            try:
+                rc = mat.ReflectionColor; col = [rc.R/255.0, rc.G/255.0, rc.B/255.0]
+                if max(col) < 0.04: col = None
+            except: pass
+            if col is None:
+                d = mat.DiffuseColor; col = [d.R/255.0, d.G/255.0, d.B/255.0]
+                if max(col) < 0.04: col = [0.9, 0.9, 0.9]
+            return (refl, rgh, col)
+    except: pass
+    return None
 
 def material_texture(obj):
     """Diffuse-Bitmap-Textur (Texture-Objekt, fuer Dateiname + UVW-Transform)."""
@@ -245,10 +288,13 @@ def collect(raw):
         meshes = meshes_of_object(obj, tex_key is not None)
         if not meshes: return
         col = material_color(obj) if OPT.get('materials', True) else DEFAULT_COL
+        metal = None
+        if OPT.get('materials', True) and not glass and not tex_key:
+            metal = material_metal(obj)   # (metalness, roughness, [r,g,b]) oder None
         for m in meshes:
             if tex_key and tex_obj is not None: bake_uvw(m, tex_obj)   # Repeat/Offset in UVs backen
             if xform and xform != Rhino.Geometry.Transform.Identity: m.Transform(xform)
-            raw.append({'mesh':m,'grp':'scan' if scan else 'cad','gmat':'glass' if glass else '','tex':tex_key,'color':col})
+            raw.append({'mesh':m,'grp':'scan' if scan else 'cad','gmat':'glass' if glass else '','tex':tex_key,'color':col,'metal':metal})
             stats['meshes'] += 1
             if scan: stats['scan'] += 1
             if glass: stats['glass'] += 1
@@ -309,8 +355,12 @@ def merge_and_extract(raw):
     buckets = {}   # key -> [Mesh, meta]
     for r in raw:
         c = r['color']
+        mt = r.get('metal')
         if r['tex']:
             key = ('t', r['grp'], r['gmat'], r['tex'])
+        elif mt:
+            key = ('m', r['grp'], int(round(mt[0]*10)), int(round(mt[1]*10)),
+                   (int(round(mt[2][0]*20)), int(round(mt[2][1]*20)), int(round(mt[2][2]*20))))
         else:
             key = ('c', r['grp'], r['gmat'], (int(round(c[0]*20)), int(round(c[1]*20)), int(round(c[2]*20))))
         if key not in buckets: buckets[key] = [Rhino.Geometry.Mesh(), r]
@@ -399,6 +449,12 @@ def build_glb(renderables, tex_cache):
             k='tex:'+r['tex']
             if k not in mat_index:
                 materials.append({'name':r['tex'],'pbrMetallicRoughness':{'baseColorTexture':{'index':img_index[r['tex']]},'baseColorFactor':[1,1,1,1],'metallicFactor':0.0,'roughnessFactor':0.9},'doubleSided':True}); mat_index[k]=len(materials)-1
+            return mat_index[k]
+        mt=r.get('metal')
+        if mt:
+            mc=mt[2]; k='metal:%0.2f_%0.2f_%0.2f_%0.2f'%(mt[0],mt[1],mc[0],mc[1])
+            if k not in mat_index:
+                materials.append({'name':'metal','pbrMetallicRoughness':{'baseColorFactor':[mc[0],mc[1],mc[2],1],'metallicFactor':float(mt[0]),'roughnessFactor':float(mt[1])},'doubleSided':True}); mat_index[k]=len(materials)-1
             return mat_index[k]
         c=r['color']; k='col:%0.2f_%0.2f_%0.2f'%(c[0],c[1],c[2])
         if k not in mat_index:

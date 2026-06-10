@@ -308,7 +308,14 @@ function applyEnvIntensity() {
   const m = viewer.getModel(); if (!m) return;
   m.traverse((o) => {
     if (!o.isMesh) return;
-    (Array.isArray(o.material) ? o.material : [o.material]).forEach((mat) => { if (mat && 'envMapIntensity' in mat) mat.envMapIntensity = v; });
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach((mat) => {
+      if (!mat || !('envMapIntensity' in mat)) return;
+      // Metalle leben von Umgebungsreflexionen: ohne sie werden sie schwarz.
+      // Sie bekommen Reflexion ~ Metalness (volle Reflexion bei metalness=1),
+      // unabhängig vom bewusst niedrigen IBL-Fülllicht für diffuse Flächen.
+      const metalness = ('metalness' in mat && typeof mat.metalness === 'number') ? mat.metalness : 0;
+      mat.envMapIntensity = cfg.post.ibl ? Math.max(v, metalness) : 0;
+    });
   });
 }
 function applyAll() {
