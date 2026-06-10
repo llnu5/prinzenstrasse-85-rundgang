@@ -16,6 +16,7 @@
 #   - Manage projects: list / open / link / delete
 # ===========================================================================
 import Rhino
+import Rhino.UI
 import scriptcontext as sc
 import rhinoscriptsyntax as rs
 import System
@@ -636,8 +637,8 @@ def do_publish():
     if pick is None: return
     settings = {}
     if pick == NEW:
-        name = rs.GetString('New project name')
-        if not name: return
+        rc, name = Rhino.UI.Dialogs.ShowEditBox('New project', 'Project name:', '', False)
+        if not rc or not name or not name.strip(): return
         name = name.strip(); pid = str(uuid.uuid4()); version = 1
     else:
         p = [x for x in projects if x['name']==pick][0]
