@@ -64,6 +64,7 @@ const pctEl = document.getElementById('pct');
 const subEl = loaderEl ? loaderEl.querySelector('.sub') : null;
 
 let scanGroup = null, cadGroup = null;   // Rhino: Layer "3D_Scan" vs. restliche Geometrie (CAD)
+let scanViewMode = null;                 // null = kein Scan-Switch; sonst 'cad' | 'scan' (für Annotations-Filter)
 
 function setProgress(loaded, total) {
   if (total) { const p = Math.min(100, Math.round((loaded / total) * 100)); barfill.style.width = p + '%'; pctEl.innerHTML = p + '&nbsp;%'; }
@@ -373,6 +374,7 @@ function setupLensControl() {
 }
 
 function setupScanSwitch() {
+  scanViewMode = 'cad';   // ein Scan-Switch existiert -> Annotationen werden nach Modus gefiltert
   const topbar = document.getElementById('topbar');
   const sep = document.createElement('div'); sep.className = 'sep';
   const seg = document.createElement('div'); seg.className = 'seg'; seg.id = 'scan-switch';
@@ -384,10 +386,13 @@ function setupScanSwitch() {
   seg.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
     const scan = b.dataset.v === 'scan';
     scanGroup.visible = scan; cadGroup.visible = !scan;
+    scanViewMode = scan ? 'scan' : 'cad';
     seg.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
     // Scan-Modus: flach/unlit auf weiß, kein Post-Processing. CAD: normal gerendert.
-    window.dispatchEvent(new CustomEvent('scan-mode', { detail: { scan } }));
+    window.dispatchEvent(new CustomEvent('scan-mode', { detail: { scan, mode: scanViewMode } }));
   }));
+  // Initial: Modus bekanntgeben (für Annotations-Filter)
+  window.dispatchEvent(new CustomEvent('scan-mode', { detail: { scan: false, mode: 'cad' } }));
 }
 
 // --- Entscheiden, was geladen wird ---
@@ -661,6 +666,7 @@ window.viewer = {
   isLit: () => litModel,
   getBounds: () => ({ center: modelCenter.clone(), radius: modelRadius, box: modelBox.clone() }),
   getProject: () => projectData,
+  getScanMode: () => scanViewMode,                         // null | 'cad' | 'scan' (für Annotations-Filter)
   setRenderHook: (fn) => { renderHook = fn; },             // null = Standard-Rendering
   getCameraMoved: () => cameraMoved,                       // für Pfadtracer-Reset
 };

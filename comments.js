@@ -342,9 +342,11 @@ async function loadAll() {
 }
 
 function toThread(t) {
-  return { id: t.id, author: t.author, body: t.body, resolved: t.resolved,
+  return { id: t.id, author: t.author, body: t.body, resolved: t.resolved, view: t.view || null,
     created_at: t.created_at, pos: new THREE.Vector3(t.pos_x, t.pos_y, t.pos_z), comments: [] };
 }
+let curMode = null;   // aktueller Scan-View-Modus: null=kein Switch | 'cad' | 'scan'
+const visibleForThread = (t) => !curMode || !t.view || t.view === curMode;
 
 function onThreadChange(p) {
   if (!inProject(p.new) && !inProject(p.old)) return;
@@ -376,7 +378,7 @@ function onCommentChange(p) {
 // ---------------------------------------------------------------------------
 async function createThread(pos, body) {
   const { data, error } = await sb.from('threads')
-    .insert({ author: name, body, pos_x: pos.x, pos_y: pos.y, pos_z: pos.z, project_id: PID })
+    .insert({ author: name, body, pos_x: pos.x, pos_y: pos.y, pos_z: pos.z, project_id: PID, view: curMode })
     .select().single();
   if (error) { alert('Could not save comment: ' + error.message); return; }
   threads.set(data.id, toThread(data));
@@ -412,13 +414,13 @@ async function deleteComment(threadId, commentId) {
 //  Pins (3D -> Bildschirm)
 // ---------------------------------------------------------------------------
 function visibleThreads() {
-  const arr = [...threads.values()];
+  const arr = [...threads.values()].filter(visibleForThread);
   return arr.filter((t) => filter === 'all' ? true : filter === 'resolved' ? t.resolved : !t.resolved);
 }
 
 function syncPins() {
   const shouldShow = new Set(
-    [...threads.values()].filter((t) => t.resolved ? (filter !== 'open') : true).map((t) => t.id)
+    [...threads.values()].filter((t) => (t.resolved ? (filter !== 'open') : true) && visibleForThread(t)).map((t) => t.id)
   );
   // entfernen
   for (const [id, e] of pinEls) if (!threads.has(id) || !shouldShow.has(id)) { e.remove(); pinEls.delete(id); }
@@ -569,7 +571,7 @@ function renderList() {
   const list = document.getElementById('cmt-list');
   const arr = visibleThreads().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   const counts = { open: 0, resolved: 0 };
-  for (const t of threads.values()) t.resolved ? counts.resolved++ : counts.open++;
+  for (const t of threads.values()) { if (!visibleForThread(t)) continue; t.resolved ? counts.resolved++ : counts.open++; }
   document.querySelector('#cmt-filter [data-f="open"]').textContent = `Open (${counts.open})`;
   document.querySelector('#cmt-filter [data-f="resolved"]').textContent = `Done (${counts.resolved})`;
 
@@ -654,6 +656,11 @@ function start() {
   const dom = viewer.domElement;
   dom.addEventListener('pointerdown', onDown);
   window.addEventListener('pointerup', onUp);
+  curMode = viewer.getScanMode ? viewer.getScanMode() : null;
+  window.addEventListener('scan-mode', (e) => {
+    curMode = (e.detail && e.detail.mode) || (e.detail && e.detail.scan ? 'scan' : 'cad');
+    syncPins(); renderList();
+  });
   initBackend();
 }
 if (window.viewer && window.viewer.getModel && window.viewer.getModel()) start();

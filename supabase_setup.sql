@@ -12,6 +12,7 @@ create table if not exists public.threads (
   pos_y       double precision not null,
   pos_z       double precision not null,
   resolved    boolean not null default false,
+  view        text,                              -- 'cad' | 'scan' | null: in welchem Ansichtsmodus erstellt
   created_at  timestamptz not null default now()
 );
 
@@ -49,12 +50,17 @@ create table if not exists public.measurements (
   author      text,
   ax double precision not null, ay double precision not null, az double precision not null,
   bx double precision not null, by double precision not null, bz double precision not null,
+  view text,                                     -- 'cad' | 'scan' | null: in welchem Ansichtsmodus erstellt
   created_at  timestamptz not null default now()
 );
 alter table public.measurements enable row level security;
 drop policy if exists measurements_all on public.measurements;
 create policy measurements_all on public.measurements for all using (true) with check (true);
 alter publication supabase_realtime add table public.measurements;
+
+-- Migration für bestehende Datenbanken: 'view'-Spalte nachrüsten
+alter table public.threads      add column if not exists view text;
+alter table public.measurements add column if not exists view text;
 
 -- ---------------------------------------------------------------------------
 --  Projekte + Upload (Multi-Projekt)

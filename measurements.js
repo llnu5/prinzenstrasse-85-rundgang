@@ -68,6 +68,8 @@ let firstPoint = null;           // Vector3 des ersten Punkts (Messung in Arbeit
 let firstSphere = null;
 let previewLine = null, previewLabel = null;
 let lastNDC = null;              // letzte Mausposition über dem Canvas
+let curMode = null;              // aktueller Scan-View-Modus: null=kein Switch | 'cad' | 'scan'
+const visibleFor = (it) => !curMode || !it.view || it.view === curMode;   // ohne Switch / ohne Tag -> immer sichtbar
 
 // ---------------------------------------------------------------------------
 //  Helpers
@@ -120,7 +122,7 @@ async function initBackend() {
 
 async function createMeasurement(a, b) {
   const author = localStorage.getItem('cmt_name') || 'Guest';
-  const row = { author, ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z, project_id: PID };
+  const row = { author, ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z, project_id: PID, view: curMode };
   const { data, error } = await sb.from('measurements').insert(row).select().single();
   if (error) { alert('Could not save measurement: ' + error.message); return; }
   addItem(data);
@@ -144,7 +146,7 @@ function addItem(r) {
   label.innerHTML = `<span class="val">${fmt(a.distanceTo(b))}</span><span class="del" title="Delete measurement">×</span>`;
   label.querySelector('.del').addEventListener('click', (e) => { e.stopPropagation(); deleteMeasurement(r.id); });
   labelsEl.appendChild(label);
-  items.set(r.id, { id: r.id, a, b, author: r.author, line, sa, sb: sbp, label });
+  items.set(r.id, { id: r.id, a, b, author: r.author, line, sa, sb: sbp, label, view: r.view || null });
 }
 function removeItem(id) {
   const it = items.get(id);
@@ -162,6 +164,9 @@ function frame() {
   if (!viewer) return;
   if (!_midV) _midV = new THREE.Vector3();
   for (const it of items.values()) {
+    const vis = visibleFor(it);                       // nur im passenden Modus (CAD/Scan) zeigen
+    it.line.visible = vis; it.sa.visible = vis; it.sb.visible = vis;
+    if (!vis) { it.label.style.display = 'none'; continue; }
     _midV.set((it.a.x + it.b.x) / 2, (it.a.y + it.b.y) / 2, (it.a.z + it.b.z) / 2);
     const s = viewer.worldToScreen(_midV);
     if (s.behind) { it.label.style.display = 'none'; continue; }
@@ -251,6 +256,8 @@ function onMove(e) {
 function start() {
   viewer = window.viewer;
   THREE = viewer.THREE;
+  curMode = viewer.getScanMode ? viewer.getScanMode() : null;
+  window.addEventListener('scan-mode', (e) => { curMode = (e.detail && e.detail.mode) || (e.detail && e.detail.scan ? 'scan' : 'cad'); });
   viewer.addFrameCallback(frame);
   const dom = viewer.domElement;
   dom.addEventListener('pointerdown', onDown);
