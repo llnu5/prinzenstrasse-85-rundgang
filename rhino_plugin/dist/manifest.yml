@@ -1,0 +1,16 @@
+---
+name: dreihoch-metaverse
+version: 1.0.0
+authors:
+  - Dreihoch
+description: >
+  Publish Rhino models (geometry, VisualARQ blocks, textures, 3D scans) to the
+  Dreihoch Metaverse web viewer. Adds the commands "Publish" and "PublishUpload"
+  and a toolbar. Works in Rhino 6, 7 and 8.
+url: "https://llnu5.github.io/dreihoch-metaverse/"
+keywords:
+  - publish
+  - web
+  - viewer
+  - glb
+  - export
