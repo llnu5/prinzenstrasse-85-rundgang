@@ -391,9 +391,16 @@ function setupScanSwitch() {
 }
 
 // --- Entscheiden, was geladen wird ---
+function showNoProject() {
+  const h1 = loaderEl.querySelector('h1'); if (h1) h1.textContent = 'No project selected';
+  if (subEl) subEl.textContent = 'Open a project via its link.';
+  const bar = loaderEl.querySelector('.bar'); if (bar) bar.style.display = 'none';
+  if (pctEl) pctEl.innerHTML = '<a href="./admin.html" style="color:var(--blue);text-decoration:none">Open admin page →</a>';
+}
+
 function startLoad() {
   const pid = window.PROJECT_ID;
-  if (!pid) { loadGLB('./model.glb'); return; }   // default project
+  if (!pid) { showNoProject(); return; }   // no default model anymore
   fetch(`${window.SUPABASE_URL}/rest/v1/projects?id=eq.${pid}&select=*`, {
     headers: { apikey: window.SUPABASE_ANON_KEY, Authorization: 'Bearer ' + window.SUPABASE_ANON_KEY },
   }).then((r) => r.json()).then((rows) => {
