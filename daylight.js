@@ -7,6 +7,7 @@
 // ===========================================================================
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -53,7 +54,7 @@ function defaults() {
 
 let viewer, scene, camera, renderer, bounds;
 let sun, hemi, sky, ground, amb;
-let pmrem = null, envScene = null, envSky = null, envRT = null;
+let pmrem = null, envScene = null, envSky = null, envRT = null, roomEnvRT = null;
 let composer = null;
 let cfg = defaults();
 
@@ -141,7 +142,7 @@ panel.innerHTML = `
       </div>
       <div class="dl-row" style="margin-top:9px"><label>Supersampling</label><select id="dl-supersample"><option value="1">1× (fast)</option><option value="1.5">1.5×</option><option value="2">2× (sharp)</option></select></div>
       <div style="height:9px"></div>
-      ${toggle('dl-ibl', 'Environment reflections (IBL)')}
+      ${toggle('dl-ibl', 'Environment glow (matte surfaces)')}
       <div class="dl-sub">${slider('dl-ibl-int', 'Intensity', 0, 2, 0.05, 1, '')}</div>
     </div>
 
@@ -294,27 +295,21 @@ function applyAmbient() { if (amb) amb.intensity = cfg.post.ambient; }
 // IBL: Umgebungskarte aus dem aktuellen Himmel erzeugen -> Reflexionen + Fülllicht
 function updateEnvironment() {
   if (!pmrem) return;
-  if (!cfg.post.ibl) { scene.environment = null; return; }
-  const su = sky.material.uniforms, eu = envSky.material.uniforms;
-  eu.sunPosition.value.copy(su.sunPosition.value);
-  eu.turbidity.value = su.turbidity.value; eu.rayleigh.value = su.rayleigh.value;
-  eu.mieCoefficient.value = su.mieCoefficient.value; eu.mieDirectionalG.value = su.mieDirectionalG.value;
-  if (envRT) envRT.dispose();
-  envRT = pmrem.fromScene(envScene, 0, 0.1, 100);
-  scene.environment = envRT.texture;
+  // Reflexionsquelle ist IMMER die neutrale Studio-Umgebung (unabhängig von der Tageszeit).
+  // So wird Metall nie schwarz und sieht konsistent aus, statt den grellen Himmel zu spiegeln.
+  scene.environment = roomEnvRT ? roomEnvRT.texture : null;
 }
 function applyEnvIntensity() {
-  const v = cfg.post.ibl ? cfg.post.iblIntensity : 0;
+  const fill = cfg.post.ibl ? cfg.post.iblIntensity : 0;   // dezenter Umgebungs-Glanz auf matten Flächen
   const m = viewer.getModel(); if (!m) return;
   m.traverse((o) => {
     if (!o.isMesh) return;
     (Array.isArray(o.material) ? o.material : [o.material]).forEach((mat) => {
       if (!mat || !('envMapIntensity' in mat)) return;
-      // Metalle leben von Umgebungsreflexionen: ohne sie werden sie schwarz.
-      // Sie bekommen Reflexion ~ Metalness (volle Reflexion bei metalness=1),
-      // unabhängig vom bewusst niedrigen IBL-Fülllicht für diffuse Flächen.
       const metalness = ('metalness' in mat && typeof mat.metalness === 'number') ? mat.metalness : 0;
-      mat.envMapIntensity = cfg.post.ibl ? Math.max(v, metalness) : 0;
+      // Metall reflektiert die Studio-Umgebung VOLL und unabhängig vom Regler
+      // (sonst schwarz/ausgebrannt). Matte Flächen: nur dezenter Glanz über den Regler.
+      mat.envMapIntensity = Math.max(fill, metalness);
     });
   });
 }
@@ -421,9 +416,12 @@ function buildRig() {
   amb = new THREE.AmbientLight(0xffffff, cfg.post.ambient); scene.add(amb);
   sun = new THREE.DirectionalLight(0xffffff, 2.0); scene.add(sun); scene.add(sun.target);
   sky = new Sky(); sky.scale.setScalar(Math.max(2000, bounds.radius * 100)); scene.add(sky);
-  // IBL: separater Himmel + PMREM-Generator für Umgebungsreflexionen
+  // Reflexionen: neutrale Studio-Umgebung (Best Practice) -> Metall sieht aus wie Metall,
+  // brennt nicht aus, unabhängig von Tageszeit. (Separater Himmel bleibt für optionalen Fill.)
   envScene = new THREE.Scene(); envSky = new Sky(); envSky.scale.setScalar(100); envScene.add(envSky);
   pmrem = new THREE.PMREMGenerator(renderer); pmrem.compileEquirectangularShader();
+  if (roomEnvRT) roomEnvRT.dispose();
+  roomEnvRT = pmrem.fromScene(new RoomEnvironment(), 0.04);   // neutrale Reflexionskarte, einmalig
   const g = new THREE.Mesh(new THREE.PlaneGeometry(bounds.radius * 8, bounds.radius * 8), new THREE.ShadowMaterial({ opacity: 0.32 }));
   g.rotation.x = -Math.PI / 2; g.position.set(bounds.center.x, bounds.box.min.y - bounds.radius * 0.001, bounds.center.z);
   g.receiveShadow = true; ground = g; scene.add(g);
