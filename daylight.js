@@ -293,23 +293,27 @@ function applyAmbient() { if (amb) amb.intensity = cfg.post.ambient; }
 
 // IBL: Umgebungskarte aus dem aktuellen Himmel erzeugen -> Reflexionen + Fülllicht
 function buildReflectionEnv() {
-  // Helle, weiche Gradient-Umgebung (Zenit hell -> Horizont mittel -> Boden dunkler).
-  // Reflektiert auf Metall als sauberer Hell-Dunkel-Verlauf statt dunkler Studio-Strips.
-  const c = document.createElement('canvas'); c.width = 8; c.height = 256;
-  const ctx = c.getContext('2d');
-  const grd = ctx.createLinearGradient(0, 0, 0, 256);
-  grd.addColorStop(0.00, '#ffffff');
-  grd.addColorStop(0.42, '#eef3f7');
-  grd.addColorStop(0.50, '#cfd5db');
-  grd.addColorStop(0.52, '#9aa0a6');
-  grd.addColorStop(1.00, '#5f6266');
-  ctx.fillStyle = grd; ctx.fillRect(0, 0, 8, 256);
-  const tex = new THREE.CanvasTexture(c);
-  tex.mapping = THREE.EquirectangularReflectionMapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const rt = pmrem.fromEquirectangular(tex);
-  tex.dispose();
-  return rt;
+  // Helle, weiche Umgebung (Boden dunkel -> Horizont hell -> Zenit weiß) als Reflexionsquelle.
+  // Über den BEWÄHRTEN fromScene-Pfad gebaut (wie RoomEnvironment vorher), damit nichts bricht.
+  try {
+    const s = new THREE.Scene();
+    const geo = new THREE.SphereGeometry(50, 32, 16);
+    const pos = geo.attributes.position;
+    const bottom = new THREE.Color(0x55585c), horizon = new THREE.Color(0xc8ced4), top = new THREE.Color(0xffffff);
+    const cols = new Float32Array(pos.count * 3); const tmp = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const t = (pos.getY(i) / 50 + 1) / 2;                 // 0 = unten, 1 = oben
+      if (t < 0.5) tmp.copy(bottom).lerp(horizon, t * 2);
+      else tmp.copy(horizon).lerp(top, (t - 0.5) * 2);
+      cols[i * 3] = tmp.r; cols[i * 3 + 1] = tmp.g; cols[i * 3 + 2] = tmp.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    const mat = new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true });
+    s.add(new THREE.Mesh(geo, mat));
+    const rt = pmrem.fromScene(s, 0.04);
+    geo.dispose(); mat.dispose();
+    return rt;
+  } catch (e) { console.warn('[daylight] reflection env failed', e); return null; }
 }
 function updateEnvironment() {
   if (!pmrem) return;
